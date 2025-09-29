@@ -328,10 +328,114 @@ const generateQuestions = () => {
   return questions;
 };
 
-// Enhanced AI scoring function
+// Generate sample answers for each question
+const generateSampleAnswer = (question, difficulty) => {
+  const sampleAnswers = {
+    // Easy questions
+    "What is React and what are its main features?": "React is a JavaScript library for building user interfaces, particularly web applications. Its main features include: 1) Component-based architecture - allows building reusable UI components, 2) Virtual DOM - improves performance by minimizing direct DOM manipulation, 3) JSX - syntax extension that allows writing HTML-like code in JavaScript, 4) Unidirectional data flow - makes the application more predictable and easier to debug, 5) Rich ecosystem - with tools like React Router, Redux, and many third-party libraries.",
+    
+    "Explain the difference between let, const, and var in JavaScript.": "The main differences are: 1) **Scope**: var is function-scoped, while let and const are block-scoped. 2) **Hoisting**: var declarations are hoisted and initialized with undefined, let and const are hoisted but not initialized (temporal dead zone). 3) **Reassignment**: var and let can be reassigned, const cannot be reassigned after declaration. 4) **Redeclaration**: var can be redeclared in the same scope, let and const cannot. 5) **Best Practice**: Use const by default, let when you need to reassign, avoid var.",
+    
+    "What is the purpose of useEffect in React?": "useEffect is a React Hook that allows you to perform side effects in functional components. Its purposes include: 1) **Data fetching** - making API calls when component mounts or data changes, 2) **Setting up subscriptions** - connecting to external data sources, 3) **Manual DOM manipulation** - updating document title, adding event listeners, 4) **Cleanup** - removing event listeners, canceling API requests when component unmounts. The hook takes a function and an optional dependency array to control when the effect runs.",
+    
+    // Medium questions
+    "Explain the React component lifecycle methods.": "React class components have several lifecycle methods: 1) **Mounting**: componentDidMount() - called after component is rendered to DOM, 2) **Updating**: componentDidUpdate() - called after component updates, componentWillReceiveProps() - called when new props are received, 3) **Unmounting**: componentWillUnmount() - called before component is removed from DOM, 4) **Error Handling**: componentDidCatch() - catches errors in child components. In functional components, useEffect replaces these methods with dependency arrays controlling when effects run.",
+    
+    "How do you manage state in React applications?": "State management approaches include: 1) **Local State**: useState hook for component-specific state, 2) **Context API**: for sharing state across multiple components without prop drilling, 3) **External Libraries**: Redux for complex applications with predictable state updates, 4) **Custom Hooks**: for reusable stateful logic, 5) **Server State**: libraries like React Query for API data. Choose based on application complexity - start with local state and useState, move to Context for moderate complexity, consider Redux for large applications.",
+    
+    "What is the difference between props and state?": "Props and state are both ways to store data in React: 1) **Props**: immutable data passed from parent to child components, cannot be modified by child, used for configuration and communication, 2) **State**: mutable data owned by the component, can be updated using setState or useState, triggers re-renders when changed, 3) **Key Difference**: Props flow down, state stays local. Props are like function parameters, state is like component's internal memory. Use props for data that doesn't change, state for data that can change and affects rendering.",
+    
+    // Hard questions
+    "How do you optimize React application performance?": "Performance optimization strategies include: 1) **Code Splitting**: Use React.lazy() and Suspense for route-based splitting, 2) **Memoization**: React.memo() for component memoization, useMemo() for expensive calculations, useCallback() for function memoization, 3) **Virtualization**: For large lists using react-window or react-virtualized, 4) **Bundle Optimization**: Tree shaking, minification, compression, 5) **State Management**: Keep state as local as possible, avoid unnecessary re-renders, 6) **Profiling**: Use React DevTools Profiler to identify bottlenecks, 7) **Server-Side Rendering**: Use Next.js for better initial load performance.",
+    
+    "Explain the difference between controlled and uncontrolled components.": "Controlled vs Uncontrolled components: 1) **Controlled**: Form data is handled by React state, input value is controlled by component state, onChange handlers update state, React controls the form behavior, better for validation and complex interactions, 2) **Uncontrolled**: Form data is handled by DOM, use refs to access input values, defaultValue sets initial value, DOM controls the form behavior, simpler for basic forms, 3) **When to use**: Controlled for dynamic validation, complex state management, uncontrolled for simple forms or when integrating with non-React code.",
+    
+    "How do you implement error boundaries in React?": "Error boundaries catch JavaScript errors in child components: 1) **Class Component**: Create a class component that implements componentDidCatch(error, errorInfo) and render() methods, 2) **Usage**: Wrap components that might throw errors, 3) **Limitations**: Only catch errors in render methods, lifecycle methods, and constructors, not in event handlers, async code, or during server-side rendering, 4) **Implementation**: class ErrorBoundary extends React.Component { componentDidCatch(error, errorInfo) { logError(error, errorInfo); } render() { return this.state.hasError ? <h1>Something went wrong</h1> : this.props.children; } }",
+    
+    "What is the difference between useCallback and useMemo?": "useCallback and useMemo are optimization hooks: 1) **useCallback**: Returns a memoized callback function, prevents child re-renders when passing functions as props, use when passing functions to child components, 2) **useMemo**: Returns a memoized value, prevents expensive calculations on every render, use for expensive computations, 3) **Syntax**: useCallback(fn, deps) vs useMemo(() => fn(), deps), 4) **When to use**: useCallback for function references, useMemo for computed values, 5) **Dependencies**: Both take dependency arrays - only re-run when dependencies change, 6) **Performance**: Use sparingly, only when you have performance issues, as they add overhead."
+  };
+
+  // Return specific sample answer if available, otherwise generate a generic one
+  if (sampleAnswers[question.question]) {
+    return sampleAnswers[question.question];
+  }
+
+  // Generate generic sample answer based on difficulty and category
+  const genericAnswers = {
+    easy: `A good answer for this ${question.category} question would include: 1) A clear definition of the main concept, 2) Key features or characteristics, 3) Simple examples or use cases, 4) Basic benefits or importance. For this question about ${question.question.toLowerCase()}, you should explain the fundamental concept clearly and provide a practical example.`,
+    
+    medium: `An effective answer for this ${question.category} question should cover: 1) Detailed explanation of the concept, 2) Comparison with related concepts, 3) Real-world examples or scenarios, 4) Best practices or common patterns, 5) Potential challenges or considerations. For this question, demonstrate understanding through examples and show how this concept applies in actual development scenarios.`,
+    
+    hard: `A comprehensive answer for this advanced ${question.category} question should include: 1) Deep technical understanding, 2) Multiple approaches or strategies, 3) Performance implications, 4) Trade-offs and alternatives, 5) Real-world implementation examples, 6) Common pitfalls to avoid. For this complex question, show expertise by discussing various approaches, their pros and cons, and when to use each approach in different scenarios.`
+  };
+
+  return genericAnswers[difficulty] || genericAnswers.medium;
+};
+
+// Generate AI feedback for individual answers
+const generateAnswerFeedback = (question, answer, score, difficulty) => {
+  if (!answer || answer.trim().length === 0) {
+    return {
+      feedback: "No answer provided within the time limit. Consider reviewing the fundamental concepts related to this topic.",
+      suggestions: ["Review basic concepts", "Practice time management", "Study related materials"],
+      sampleAnswer: generateSampleAnswer(question, difficulty)
+    };
+  }
+
+  const answerLength = answer.trim().length;
+  let feedback = "";
+  let suggestions = [];
+
+  // Generate feedback based on score and content
+  if (score >= 80) {
+    feedback = `Excellent answer! Your response demonstrates strong understanding of ${question.category.toLowerCase()}. `;
+    if (answerLength > 100) {
+      feedback += "You provided comprehensive details and showed deep knowledge of the topic.";
+    } else {
+      feedback += "Your answer was concise yet covered the key points effectively.";
+    }
+    suggestions = ["Continue building on this knowledge", "Share your expertise with others", "Explore advanced topics"];
+  } else if (score >= 60) {
+    feedback = `Good response! You showed solid understanding of ${question.category.toLowerCase()}. `;
+    if (answerLength > 50) {
+      feedback += "Your answer covered the main points well, though there's room for more depth.";
+    } else {
+      feedback += "Consider expanding your answer with more details and examples.";
+    }
+    suggestions = ["Review related concepts", "Practice explaining concepts in detail", "Study real-world examples"];
+  } else if (score >= 40) {
+    feedback = `Your answer shows some understanding but needs improvement in ${question.category.toLowerCase()}. `;
+    feedback += "Consider studying the fundamental concepts more thoroughly.";
+    suggestions = ["Review basic concepts", "Practice with examples", "Seek additional learning resources"];
+  } else {
+    feedback = `This area needs significant improvement. Focus on learning the basic concepts of ${question.category.toLowerCase()}. `;
+    feedback += "Consider starting with foundational materials.";
+    suggestions = ["Study fundamental concepts", "Practice basic examples", "Consider additional training"];
+  }
+
+  // Add difficulty-specific feedback
+  if (difficulty === 'easy') {
+    feedback += " This was a basic question - mastering these fundamentals is crucial for your development journey.";
+  } else if (difficulty === 'medium') {
+    feedback += " This was an intermediate question - building on your basics with more complex scenarios.";
+  } else if (difficulty === 'hard') {
+    feedback += " This was an advanced question - these concepts require deep understanding and practical experience.";
+  }
+
+  return {
+    feedback: feedback.trim(),
+    suggestions: suggestions,
+    sampleAnswer: generateSampleAnswer(question, difficulty)
+  };
+};
+
+// Enhanced AI scoring function with feedback generation
 const scoreAnswer = (question, answer, difficulty) => {
   if (!answer || answer.trim().length === 0) {
-    return 0;
+    return {
+      score: 0,
+      feedback: generateAnswerFeedback(question, answer, 0, difficulty)
+    };
   }
 
   let baseScore = 30;
@@ -369,7 +473,10 @@ const scoreAnswer = (question, answer, difficulty) => {
     (baseScore + keywordScore + Math.random() * 15) * difficultyMultiplier[difficulty]
   ));
   
-  return finalScore;
+  return {
+    score: finalScore,
+    feedback: generateAnswerFeedback(question, answer, finalScore, difficulty)
+  };
 };
 
 // Generate AI summary
@@ -492,30 +599,56 @@ app.post('/api/start-interview', async (req, res) => {
 
 app.post('/api/submit-answer', async (req, res) => {
   try {
+    console.log('Submit answer request received:', req.body);
+    
     const { question, answer, candidateInfo } = req.body;
     
-    // Enhanced AI scoring
-    const score = scoreAnswer(question, answer, question.difficulty);
+    // Validate required fields
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+    
+    if (!candidateInfo) {
+      return res.status(400).json({ error: 'Candidate info is required' });
+    }
+    
+    // Enhanced AI scoring with feedback
+    const result = scoreAnswer(question, answer, question.difficulty);
+    
+    console.log('Scoring result:', result);
     
     res.json({
       success: true,
-      score: score,
-      feedback: `Answer evaluated. Score: ${score}/100`
+      score: result.score,
+      feedback: result.feedback,
+      message: `Answer evaluated. Score: ${result.score}/100`
     });
   } catch (error) {
     console.error('Submit answer error:', error);
-    res.status(500).json({ error: 'Failed to submit answer' });
+    res.status(500).json({ 
+      error: 'Failed to submit answer',
+      details: error.message 
+    });
   }
 });
 
+// Update the complete interview route to include sample answers
 app.post('/api/complete-interview', async (req, res) => {
   try {
     const { candidateInfo, answers, scores, questions } = req.body;
     
     const finalScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+    
+    // Generate feedback for each answer (including sample answers)
+    const answerFeedbacks = answers.map((answer, index) => {
+      const question = questions[index];
+      const score = scores[index];
+      return generateAnswerFeedback(question, answer, score, question.difficulty);
+    });
+    
     const summary = generateAISummary(candidateInfo, answers, scores, questions);
     
-    // Save candidate to database
+    // Save candidate to database with feedback and sample answers
     const candidateData = {
       name: candidateInfo.name,
       email: candidateInfo.email,
@@ -524,7 +657,8 @@ app.post('/api/complete-interview', async (req, res) => {
       summary: summary,
       answers: answers,
       scores: scores,
-      questions: questions || [],
+      questions: questions,
+      answerFeedbacks: answerFeedbacks,
       startedAt: new Date(),
       completedAt: new Date()
     };
@@ -535,6 +669,7 @@ app.post('/api/complete-interview', async (req, res) => {
       success: true,
       finalScore: finalScore,
       summary: summary,
+      answerFeedbacks: answerFeedbacks,
       candidateId: savedCandidate._id
     });
   } catch (error) {

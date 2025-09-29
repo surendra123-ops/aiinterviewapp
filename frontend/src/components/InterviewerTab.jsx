@@ -15,7 +15,9 @@ import {
   Space,
   Select,
   Spin,
-  Divider
+  Divider,
+  List,
+  Collapse
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -23,12 +25,15 @@ import {
   UserOutlined,
   SortAscendingOutlined,
   SortDescendingOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  RobotOutlined,
+  BulbOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
+const { Panel } = Collapse;
 
 const InterviewerTab = () => {
   const { state, dispatch, actions } = useInterview();
@@ -248,7 +253,8 @@ const InterviewerTab = () => {
             Close
           </Button>
         ]}
-        width={800}
+        width={1200}
+        style={{ top: 20 }}
       >
         {selectedCandidate && (
           <div>
@@ -280,27 +286,89 @@ const InterviewerTab = () => {
             </div>
 
             <div className="mt-6">
-              <Title level={4}>Question & Answer Details</Title>
-              {selectedCandidate.questions && selectedCandidate.questions.map((question, index) => (
-                <Card key={index} size="small" className="mb-3">
-                  <div className="mb-2">
-                    <Text strong>Q{index + 1}: {question.question}</Text>
-                    <Tag color="blue" className="ml-2">{question.difficulty}</Tag>
-                    <Tag color="green" className="ml-1">{question.category}</Tag>
-                  </div>
-                  <div className="mb-2">
-                    <Text type="secondary">Answer: </Text>
-                    <Text>{selectedCandidate.answers[index] || 'No answer provided'}</Text>
-                  </div>
-                  <div>
-                    <Text type="secondary">Score: </Text>
-                    <Tag color={selectedCandidate.scores[index] >= 80 ? 'green' : 
-                               selectedCandidate.scores[index] >= 60 ? 'orange' : 'red'}>
-                      {selectedCandidate.scores[index]}/100
-                    </Tag>
-                  </div>
-                </Card>
-              ))}
+              <Title level={4}>Question & Answer Analysis</Title>
+              <Collapse defaultActiveKey={['0']}>
+                {selectedCandidate.questions && selectedCandidate.questions.map((question, index) => {
+                  const answer = selectedCandidate.answers[index] || 'No answer provided';
+                  const score = selectedCandidate.scores[index] || 0;
+                  const feedback = selectedCandidate.answerFeedbacks && selectedCandidate.answerFeedbacks[index] 
+                    ? selectedCandidate.answerFeedbacks[index] 
+                    : { 
+                        feedback: 'No feedback available', 
+                        suggestions: [],
+                        sampleAnswer: 'No sample answer available'
+                      };
+                  
+                  return (
+                    <Panel 
+                      header={
+                        <div className="flex justify-between items-center">
+                          <span>
+                            <Text strong>Q{index + 1}: {question.question}</Text>
+                            <Tag color="blue" className="ml-2">{question.difficulty}</Tag>
+                            <Tag color="green" className="ml-1">{question.category}</Tag>
+                          </span>
+                          <Tag color={score >= 80 ? 'green' : score >= 60 ? 'orange' : 'red'}>
+                            {score}/100
+                          </Tag>
+                        </div>
+                      } 
+                      key={index}
+                    >
+                      <div className="space-y-4">
+                        {/* Candidate's Answer */}
+                        <div>
+                          <Title level={5}>
+                            <UserOutlined className="mr-2" />
+                            Candidate's Answer:
+                          </Title>
+                          <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400">
+                            <Text>{answer}</Text>
+                          </div>
+                        </div>
+
+                        {/* AI Feedback */}
+                        <div>
+                          <Title level={5}>
+                            <RobotOutlined className="mr-2" />
+                            AI Feedback:
+                          </Title>
+                          <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
+                            <Text>{feedback.feedback}</Text>
+                          </div>
+                        </div>
+
+                        {/* Sample Answer */}
+                        <div>
+                          <Title level={5}>
+                            <BulbOutlined className="mr-2" />
+                            Sample Answer:
+                          </Title>
+                          <div className="bg-green-50 p-3 rounded-lg border-l-4 border-green-400">
+                            <Text>{feedback.sampleAnswer}</Text>
+                          </div>
+                        </div>
+
+                        {/* Suggestions */}
+                        {feedback.suggestions && feedback.suggestions.length > 0 && (
+                          <div>
+                            <Title level={5}>Suggestions for Improvement:</Title>
+                            <List
+                              size="small"
+                              dataSource={feedback.suggestions}
+                              renderItem={(item) => (
+                                <List.Item>
+                                  <Text>• {item}</Text>
+                                </List.Item>
+                              )}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </Panel>
+                  );
+                })}
+              </Collapse>
             </div>
           </div>
         )}

@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useInterview } from '../context/InterviewContext';
-import { Card, Button, Typography, Progress, Space, message } from 'antd';
-import { CheckCircleOutlined, ReloadOutlined, HomeOutlined } from '@ant-design/icons';
+import { Card, Button, Typography, Progress, Space, message, Collapse, Tag, List, Divider } from 'antd';
+import { CheckCircleOutlined, ReloadOutlined, HomeOutlined, RobotOutlined, UserOutlined, BulbOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
+const { Panel } = Collapse;
 
 const InterviewComplete = () => {
   const { state, actions } = useInterview();
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
   
-  const { candidateInfo, finalScore, summary } = state.interviewState;
+  const { candidateInfo, finalScore, summary, answerFeedbacks } = state.interviewState;
+  const { questions, answers, scores } = state.interviewState;
 
   const getScoreColor = (score) => {
     if (score >= 80) return '#52c41a';
@@ -58,8 +60,8 @@ const InterviewComplete = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <Card className="text-center">
+    <div className="max-w-6xl mx-auto">
+      <Card className="text-center mb-6">
         <div className="mb-8">
           <CheckCircleOutlined style={{ fontSize: '64px', color: '#52c41a' }} />
           <Title level={2} className="mt-4">Interview Completed!</Title>
@@ -120,6 +122,90 @@ const InterviewComplete = () => {
             Start New Interview
           </Button>
         </Space>
+      </Card>
+
+      {/* AI Feedback & Sample Answers Section */}
+      <Card title="AI Feedback & Sample Answers" className="mb-6">
+        <Collapse defaultActiveKey={['0']}>
+          {questions.map((question, index) => {
+            const answer = answers[index] || 'No answer provided';
+            const score = scores[index] || 0;
+            const feedback = answerFeedbacks[index] || { 
+              feedback: 'No feedback available', 
+              suggestions: [],
+              sampleAnswer: 'No sample answer available'
+            };
+            
+            return (
+              <Panel 
+                header={
+                  <div className="flex justify-between items-center">
+                    <span>
+                      <Text strong>Q{index + 1}: {question.question}</Text>
+                      <Tag color="blue" className="ml-2">{question.difficulty}</Tag>
+                      <Tag color="green" className="ml-1">{question.category}</Tag>
+                    </span>
+                    <Tag color={score >= 80 ? 'green' : score >= 60 ? 'orange' : 'red'}>
+                      {score}/100
+                    </Tag>
+                  </div>
+                } 
+                key={index}
+              >
+                <div className="space-y-6">
+                  {/* User Answer */}
+                  <div>
+                    <Title level={5}>
+                      <UserOutlined className="mr-2" />
+                      Your Answer:
+                    </Title>
+                    <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
+                      <Text>{answer}</Text>
+                    </div>
+                  </div>
+
+                  {/* AI Feedback */}
+                  <div>
+                    <Title level={5}>
+                      <RobotOutlined className="mr-2" />
+                      AI Feedback:
+                    </Title>
+                    <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+                      <Text>{feedback.feedback}</Text>
+                    </div>
+                  </div>
+
+                  {/* Sample Answer */}
+                  <div>
+                    <Title level={5}>
+                      <BulbOutlined className="mr-2" />
+                      Sample Answer:
+                    </Title>
+                    <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
+                      <Text>{feedback.sampleAnswer}</Text>
+                    </div>
+                  </div>
+
+                  {/* Suggestions */}
+                  {feedback.suggestions && feedback.suggestions.length > 0 && (
+                    <div>
+                      <Title level={5}>Suggestions for Improvement:</Title>
+                      <List
+                        size="small"
+                        dataSource={feedback.suggestions}
+                        renderItem={(item) => (
+                          <List.Item>
+                            <Text>• {item}</Text>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            );
+          })}
+        </Collapse>
       </Card>
     </div>
   );

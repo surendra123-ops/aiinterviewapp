@@ -32,8 +32,6 @@ const IntervieweeTab = () => {
 
       const data = await response.json();
       
-      console.log('Resume upload response:', data);
-      
       if (data.success) {
         actions.setResumeData(data.candidateInfo);
         message.success(data.message);
@@ -100,7 +98,7 @@ const IntervieweeTab = () => {
     }
   };
 
-  // Submit answer
+  // Submit answer - FIXED VERSION
   const handleSubmitAnswer = async () => {
     if (!currentAnswer.trim()) {
       message.warning('Please provide an answer');
@@ -109,8 +107,19 @@ const IntervieweeTab = () => {
 
     const currentQuestion = state.interviewState.questions[state.interviewState.currentQuestionIndex];
     
+    if (!currentQuestion) {
+      message.error('No question found');
+      return;
+    }
+    
     try {
       setLoading(true);
+      console.log('Submitting answer:', {
+        question: currentQuestion,
+        answer: currentAnswer,
+        candidateInfo: state.candidateInfo
+      });
+
       const response = await fetch('http://localhost:3001/api/submit-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,34 +132,67 @@ const IntervieweeTab = () => {
 
       const data = await response.json();
       
+      console.log('Submit answer response:', data);
+      
       if (data.success) {
-        actions.submitAnswer(currentAnswer, data.score);
+        // Store current values before clearing
+        const submittedAnswer = currentAnswer;
+        const submittedScore = data.score;
+        const submittedFeedback = data.feedback || { feedback: 'No feedback available', suggestions: [] };
+        
+        // Submit to state
+        actions.submitAnswer(submittedAnswer, submittedScore, submittedFeedback);
+        
+        // Clear input
         setCurrentAnswer('');
         
+        // Check if this is the last question
         if (state.interviewState.currentQuestionIndex < state.interviewState.questions.length - 1) {
+          // Move to next question
           actions.nextQuestion();
+          message.success('Answer submitted! Moving to next question.');
         } else {
-          // Complete interview
-          const completeResponse = await fetch('http://localhost:3001/api/complete-interview', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              candidateInfo: state.candidateInfo,
-              answers: [...state.interviewState.answers, currentAnswer],
-              scores: [...state.interviewState.scores, data.score],
-              questions: state.interviewState.questions
-            }),
-          });
+          // This is the last question - complete the interview
+          message.success('Answer submitted! Completing interview...');
           
-          const completeData = await completeResponse.json();
-          if (completeData.success) {
-            actions.completeInterview(completeData.finalScore, completeData.summary);
-          }
+          // Wait a moment for state to update, then complete interview
+          setTimeout(async () => {
+            try {
+              const completeResponse = await fetch('http://localhost:3001/api/complete-interview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  candidateInfo: state.candidateInfo,
+                  answers: [...state.interviewState.answers, submittedAnswer],
+                  scores: [...state.interviewState.scores, submittedScore],
+                  questions: state.interviewState.questions
+                }),
+              });
+              
+              const completeData = await completeResponse.json();
+              console.log('Complete interview response:', completeData);
+              
+              if (completeData.success) {
+                actions.completeInterview(
+                  completeData.finalScore, 
+                  completeData.summary, 
+                  completeData.answerFeedbacks
+                );
+              } else {
+                message.error('Failed to complete interview');
+              }
+            } catch (error) {
+              console.error('Complete interview error:', error);
+              message.error('Failed to complete interview');
+            }
+          }, 500); // Wait for state update
         }
+      } else {
+        message.error(data.error || 'Failed to submit answer');
       }
     } catch (error) {
       console.error('Submit answer error:', error);
-      message.error('Failed to submit answer');
+      message.error('Failed to submit answer. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -160,10 +202,16 @@ const IntervieweeTab = () => {
   useEffect(() => {
     if (hasExpired && state.interviewState.isStarted && !state.interviewState.isComplete && !timeoutHandledRef.current) {
       console.log('Timer expired, handling timeout...');
-      timeoutHandledRef.current = true; // Prevent multiple executions
+      timeoutHandledRef.current = true;
+      
+      // Create timeout feedback
+      const timeoutFeedback = {
+        feedback: "No answer provided within the time limit. Consider reviewing the fundamental concepts related to this topic.",
+        suggestions: ["Review basic concepts", "Practice time management", "Study related materials"]
+      };
       
       // Mark answer as empty with zero score when time runs out
-      actions.timeoutAnswer();
+      actions.submitAnswer('', 0, timeoutFeedback);
       setCurrentAnswer('');
       
       if (state.interviewState.currentQuestionIndex < state.interviewState.questions.length - 1) {
@@ -186,12 +234,12 @@ const IntervieweeTab = () => {
             
             const completeData = await completeResponse.json();
             if (completeData.success) {
-              actions.completeInterview(completeData.finalScore, completeData.summary);
+              actions.completeInterview(completeData.finalScore, completeData.summary, completeData.answerFeedbacks);
             }
           } catch (error) {
             console.error('Complete interview error:', error);
           }
-        }, 100); // Small delay to ensure state is updated
+        }, 100);
         
         message.warning('Time\'s up! Interview completed.');
       }
@@ -206,7 +254,7 @@ const IntervieweeTab = () => {
         console.log(`Starting timer for question ${state.interviewState.currentQuestionIndex + 1}, time limit: ${currentQuestion.timeLimit}s`);
         resetTimer(currentQuestion.timeLimit);
         startTimer(currentQuestion.timeLimit);
-        timeoutHandledRef.current = false; // Reset the flag for the new question
+        timeoutHandledRef.current = false;
       }
     }
   }, [state.interviewState.currentQuestionIndex, state.interviewState.isStarted, state.interviewState.isComplete]);

@@ -15,6 +15,7 @@ const initialState = {
     currentQuestionIndex: 0,
     answers: [],
     scores: [],
+    answerFeedbacks: [],
     finalScore: null,
     summary: null,
     startedAt: null,
@@ -66,6 +67,7 @@ const interviewReducer = (state, action) => {
           currentQuestionIndex: 0,
           answers: [],
           scores: [],
+          answerFeedbacks: [], // Initialize feedback array
           startedAt: new Date().toISOString()
         }
       };
@@ -94,7 +96,8 @@ const interviewReducer = (state, action) => {
         interviewState: {
           ...state.interviewState,
           answers: [...state.interviewState.answers, action.payload.answer],
-          scores: [...state.interviewState.scores, action.payload.score]
+          scores: [...state.interviewState.scores, action.payload.score],
+          answerFeedbacks: [...(state.interviewState.answerFeedbacks || []), action.payload.feedback]
         }
       };
     
@@ -105,7 +108,11 @@ const interviewReducer = (state, action) => {
         interviewState: {
           ...state.interviewState,
           answers: [...state.interviewState.answers, ''],
-          scores: [...state.interviewState.scores, 0]
+          scores: [...state.interviewState.scores, 0],
+          answerFeedbacks: [...state.interviewState.answerFeedbacks, {
+            feedback: "No answer provided within the time limit.",
+            suggestions: ["Review basic concepts", "Practice time management"]
+          }]
         }
       };
     
@@ -126,6 +133,7 @@ const interviewReducer = (state, action) => {
         summary: action.payload.summary,
         answers: state.interviewState.answers,
         scores: state.interviewState.scores,
+        answerFeedbacks: action.payload.answerFeedbacks || state.interviewState.answerFeedbacks,
         questions: state.interviewState.questions,
         completedAt: new Date().toISOString(),
         startedAt: state.interviewState.startedAt
@@ -138,6 +146,7 @@ const interviewReducer = (state, action) => {
           isComplete: true,
           finalScore: action.payload.finalScore,
           summary: action.payload.summary,
+          answerFeedbacks: action.payload.answerFeedbacks || state.interviewState.answerFeedbacks,
           completedAt: new Date().toISOString()
         },
         candidates: [...state.candidates, newCandidate]
@@ -226,10 +235,11 @@ export const InterviewProvider = ({ children }) => {
       dispatch({ type: 'RESUME_INTERVIEW' });
     },
     
-    submitAnswer: (answer, score) => {
+    submitAnswer: (answer, score, feedback) => {
+      console.log('Submitting answer:', { answer, score, feedback }); // Debug log
       dispatch({ 
         type: 'SUBMIT_ANSWER', 
-        payload: { answer, score } 
+        payload: { answer, score, feedback } 
       });
     },
     
@@ -241,10 +251,10 @@ export const InterviewProvider = ({ children }) => {
       dispatch({ type: 'NEXT_QUESTION' });
     },
     
-    completeInterview: (finalScore, summary) => {
+    completeInterview: (finalScore, summary, answerFeedbacks) => {
       dispatch({ 
         type: 'COMPLETE_INTERVIEW', 
-        payload: { finalScore, summary } 
+        payload: { finalScore, summary, answerFeedbacks } 
       });
     },
     
