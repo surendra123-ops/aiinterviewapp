@@ -27,7 +27,8 @@ import {
   SortDescendingOutlined,
   ReloadOutlined,
   RobotOutlined,
-  BulbOutlined
+  BulbOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -43,6 +44,8 @@ const InterviewerTab = () => {
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [llmAnswers, setLlmAnswers] = useState({});
+  const [loadingLlmAnswer, setLoadingLlmAnswer] = useState({});
 
   // Fetch candidates from backend
   const fetchCandidates = async () => {
@@ -157,6 +160,32 @@ const InterviewerTab = () => {
     acc[candidate.email].push(candidate);
     return acc;
   }, {});
+
+  const generateLlmAnswer = async (question, questionIndex) => {
+    setLoadingLlmAnswer(prev => ({ ...prev, [questionIndex]: true }));
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/generate-llm-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setLlmAnswers(prev => ({ ...prev, [questionIndex]: data.llmAnswer }));
+        message.success('Correct answer generated!');
+      } else {
+        message.error('Failed to generate correct answer');
+      }
+    } catch (error) {
+      console.error('Generate correct answer error:', error);
+      message.error('Failed to generate correct answer');
+    } finally {
+      setLoadingLlmAnswer(prev => ({ ...prev, [questionIndex]: false }));
+    }
+  };
 
   return (
     <div className="py-8">
@@ -336,6 +365,34 @@ const InterviewerTab = () => {
                           <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
                             <Text>{feedback.feedback}</Text>
                           </div>
+                        </div>
+
+                        {/* Correct Answer */}
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <Title level={5}>
+                              <ThunderboltOutlined className="mr-2" />
+                              Correct Answer:
+                            </Title>
+                            <Button
+                              type="primary"
+                              size="small"
+                              icon={<RobotOutlined />}
+                              loading={loadingLlmAnswer[index]}
+                              onClick={() => generateLlmAnswer(question, index)}
+                            >
+                              Generate Correct Answer
+                            </Button>
+                          </div>
+                          {llmAnswers[index] ? (
+                            <div className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-400">
+                              <Text>{llmAnswers[index]}</Text>
+                            </div>
+                          ) : (
+                            <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-gray-300 text-center">
+                              <Text type="secondary">Click "Generate Correct Answer" to see the expected response</Text>
+                            </div>
+                          )}
                         </div>
 
                         {/* Sample Answer */}

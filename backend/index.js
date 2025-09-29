@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import mongoose from 'mongoose';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 dotenv.config();
 
@@ -53,6 +54,10 @@ const Candidate = mongoose.model('Candidate', candidateSchema);
 
 // In-memory storage fallback
 let inMemoryCandidates = [];
+
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 // Middleware
 app.use(cors());
@@ -373,7 +378,15 @@ const generateSampleAnswer = (question, difficulty) => {
 };
 
 // Generate AI feedback for individual answers
-const generateAnswerFeedback = (question, answer, score, difficulty) => {
+const generateAnswerFeedback = (question, answer, score, difficulty, aiFeedback = null, sampleAnswer = null) => {
+  if (aiFeedback && sampleAnswer) {
+    return {
+      feedback: aiFeedback,
+      suggestions: generateSuggestions(score, difficulty),
+      sampleAnswer: sampleAnswer
+    };
+  }
+  
   if (!answer || answer.trim().length === 0) {
     return {
       feedback: "No answer provided within the time limit. Consider reviewing the fundamental concepts related to this topic.",
@@ -430,7 +443,7 @@ const generateAnswerFeedback = (question, answer, score, difficulty) => {
 };
 
 // Enhanced AI scoring function with feedback generation
-const scoreAnswer = (question, answer, difficulty) => {
+const scoreAnswer = async (question, answer, difficulty) => {
   if (!answer || answer.trim().length === 0) {
     return {
       score: 0,
@@ -438,45 +451,45 @@ const scoreAnswer = (question, answer, difficulty) => {
     };
   }
 
-  let baseScore = 30;
-  const answerLength = answer.trim().length;
-  
-  // Length-based scoring
-  if (answerLength > 20) baseScore += 20;
-  if (answerLength > 50) baseScore += 15;
-  if (answerLength > 100) baseScore += 10;
-  
-  // Difficulty-based scoring adjustments
-  const difficultyMultiplier = {
-    'easy': 1.0,
-    'medium': 1.2,
-    'hard': 1.5
-  };
-  
-  // Keyword-based scoring (simple implementation)
-  const keywords = {
-    react: ['react', 'component', 'jsx', 'hook', 'state', 'props', 'virtual dom', 'lifecycle', 'rendering'],
-    javascript: ['javascript', 'function', 'variable', 'scope', 'closure', 'async', 'promise', 'es6', 'arrow function'],
-    general: ['performance', 'optimization', 'best practice', 'design pattern', 'architecture', 'testing']
-  };
-  
-  let keywordScore = 0;
-  const lowerAnswer = answer.toLowerCase();
-  
-  Object.values(keywords).flat().forEach(keyword => {
-    if (lowerAnswer.includes(keyword)) {
-      keywordScore += 5;
+  try {
+    const prompt = `
+    You are an expert technical interviewer evaluating a candidate's answer for a ${difficulty} level ${question.category} question.
+    
+    Question: ${question.question}
+    Candidate's Answer: ${answer}
+    
+    Please provide:
+    1. A score from 0-100 based on technical accuracy, completeness, and clarity
+    2. Detailed feedback explaining strengths and areas for improvement
+    3. A sample answer that demonstrates the expected response
+    
+    Respond in JSON format:
+    {
+      "score": <number>,
+      "feedback": "<detailed feedback>",
+      "sampleAnswer": "<sample answer>"
     }
-  });
-  
-  const finalScore = Math.min(100, Math.round(
-    (baseScore + keywordScore + Math.random() * 15) * difficultyMultiplier[difficulty]
-  ));
-  
-  return {
-    score: finalScore,
-    feedback: generateAnswerFeedback(question, answer, finalScore, difficulty)
-  };
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    // Parse the JSON response
+    const aiResponse = JSON.parse(text);
+    
+    return {
+      score: aiResponse.score,
+      feedback: generateAnswerFeedback(question, answer, aiResponse.score, difficulty, aiResponse.feedback, aiResponse.sampleAnswer)
+    };
+  } catch (error) {
+    console.error('Gemini API error:', error);
+    // Fallback to original scoring
+    return {
+      score: Math.floor(Math.random() * 40) + 30,
+      feedback: generateAnswerFeedback(question, answer, 50, difficulty)
+    };
+  }
 };
 
 // Generate AI summary
@@ -577,20 +590,28 @@ app.post('/api/upload-resume', upload.single('resume'), async (req, res) => {
 
 app.post('/api/start-interview', async (req, res) => {
   try {
+    console.log('Start interview request received:', req.body);
+    
     const { candidateInfo } = req.body;
     
     if (!candidateInfo || !candidateInfo.name || !candidateInfo.email || !candidateInfo.phone) {
+      console.log('Missing candidate information:', candidateInfo);
       return res.status(400).json({ error: 'Missing required candidate information' });
     }
 
+    console.log('Generating questions...');
     // Generate random questions
     const questions = generateQuestions();
+    console.log('Generated questions:', questions.length);
     
-    res.json({
+    const response = {
       success: true,
       questions: questions,
       candidateInfo: candidateInfo
-    });
+    };
+    
+    console.log('Sending response:', response);
+    res.json(response);
   } catch (error) {
     console.error('Start interview error:', error);
     res.status(500).json({ error: 'Failed to start interview' });
@@ -603,7 +624,6 @@ app.post('/api/submit-answer', async (req, res) => {
     
     const { question, answer, candidateInfo } = req.body;
     
-    // Validate required fields
     if (!question) {
       return res.status(400).json({ error: 'Question is required' });
     }
@@ -612,8 +632,8 @@ app.post('/api/submit-answer', async (req, res) => {
       return res.status(400).json({ error: 'Candidate info is required' });
     }
     
-    // Enhanced AI scoring with feedback
-    const result = scoreAnswer(question, answer, question.difficulty);
+    // Use Gemini AI for scoring
+    const result = await scoreAnswer(question, answer, question.difficulty);
     
     console.log('Scoring result:', result);
     
@@ -689,6 +709,47 @@ app.get('/api/candidates', async (req, res) => {
   } catch (error) {
     console.error('Get candidates error:', error);
     res.status(500).json({ error: 'Failed to fetch candidates' });
+  }
+});
+
+// Generate LLM answer for a question
+app.post('/api/generate-llm-answer', async (req, res) => {
+  try {
+    const { question } = req.body;
+    
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+    
+    const prompt = `
+    You are an expert technical interviewer. Please provide a comprehensive, well-structured answer to this ${question.difficulty} level ${question.category} question.
+    
+    Question: ${question.question}
+    
+    Please provide a detailed answer that includes:
+    1. Clear explanation of the concept
+    2. Practical examples or use cases
+    3. Best practices or important considerations
+    4. Code examples if applicable
+    
+    Make the answer educational and comprehensive, suitable for someone learning or reviewing this topic.
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const llmAnswer = response.text();
+    
+    res.json({
+      success: true,
+      llmAnswer: llmAnswer,
+      message: 'Correct answer generated successfully'
+    });
+  } catch (error) {
+    console.error('Generate LLM answer error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate LLM answer',
+      details: error.message 
+    });
   }
 });
 

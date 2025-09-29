@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useInterview } from '../context/InterviewContext';
-import { Card, Upload, Button, Input, Form, message, Progress, Typography, Space, Spin } from 'antd';
-import { UploadOutlined, SendOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, Upload, Button, Input, Form, message, Progress, Typography, Space, Spin, Tag, List } from 'antd';
+import { UploadOutlined, SendOutlined, ClockCircleOutlined, RobotOutlined, EyeOutlined, BulbOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useTimer } from '../hooks/useTimer';
 import QuestionCard from './QuestionCard';
 import InterviewComplete from './InterviewComplete';
@@ -15,6 +15,7 @@ const IntervieweeTab = () => {
   const [loading, setLoading] = useState(false);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const timeoutHandledRef = useRef(false);
+  const [interviewStarted, setInterviewStarted] = useState(false);
 
   const { timeLeft, isRunning, hasExpired, startTimer, stopTimer, resetTimer } = useTimer();
 
@@ -70,29 +71,64 @@ const IntervieweeTab = () => {
     message.success('Information collected! You can now start the interview.');
   };
 
-  // Start interview
+  // Start interview - FIXED VERSION
   const handleStartInterview = async () => {
     try {
+      console.log('Starting interview process...');
+      
+      // Validate form fields
       const values = await form.validateFields();
+      console.log('Form validation passed, values:', values);
       
       setLoading(true);
+      
+      // Check if backend is running
+      console.log('Making request to backend...');
       const response = await fetch('http://localhost:3001/api/start-interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ candidateInfo: values }),
       });
 
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (data.success) {
+        console.log('Starting interview with questions:', data.questions);
         actions.startInterview(data.questions, values);
+        setInterviewStarted(true);
         message.success('Interview started!');
+        
+        // Add a small delay to ensure state is updated before starting timer
+        setTimeout(() => {
+          const firstQuestion = data.questions[0];
+          if (firstQuestion) {
+            console.log(`Starting timer for question 1, time limit: ${firstQuestion.timeLimit}s`);
+            resetTimer(firstQuestion.timeLimit);
+            startTimer(firstQuestion.timeLimit);
+            timeoutHandledRef.current = false;
+          }
+        }, 500);
       } else {
-        message.error('Failed to start interview');
+        console.error('Backend returned error:', data.error);
+        message.error(data.error || 'Failed to start interview');
       }
     } catch (error) {
       console.error('Start interview error:', error);
-      message.error('Failed to start interview');
+      
+      if (error.name === 'ValidationError') {
+        message.error('Please fill in all required fields');
+      } else if (error.message.includes('Failed to fetch')) {
+        message.error('Cannot connect to server. Please make sure the backend is running on port 3001');
+      } else {
+        message.error(`Failed to start interview: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -246,18 +282,22 @@ const IntervieweeTab = () => {
     }
   }, [hasExpired, state.interviewState.isStarted, state.interviewState.isComplete, state.interviewState.currentQuestionIndex]);
 
-  // Start timer when question changes
+  // Start timer when question changes - FIXED VERSION
   useEffect(() => {
-    if (state.interviewState.isStarted && !state.interviewState.isComplete) {
+    if (state.interviewState.isStarted && !state.interviewState.isComplete && interviewStarted) {
       const currentQuestion = state.interviewState.questions[state.interviewState.currentQuestionIndex];
       if (currentQuestion) {
         console.log(`Starting timer for question ${state.interviewState.currentQuestionIndex + 1}, time limit: ${currentQuestion.timeLimit}s`);
-        resetTimer(currentQuestion.timeLimit);
-        startTimer(currentQuestion.timeLimit);
-        timeoutHandledRef.current = false;
+        
+        // Add delay to ensure UI is ready
+        setTimeout(() => {
+          resetTimer(currentQuestion.timeLimit);
+          startTimer(currentQuestion.timeLimit);
+          timeoutHandledRef.current = false;
+        }, 300);
       }
     }
-  }, [state.interviewState.currentQuestionIndex, state.interviewState.isStarted, state.interviewState.isComplete]);
+  }, [state.interviewState.currentQuestionIndex, state.interviewState.isStarted, state.interviewState.isComplete, interviewStarted]);
 
   // Format timer display
   const formatTime = (seconds) => {
